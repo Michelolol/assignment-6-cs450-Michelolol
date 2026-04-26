@@ -314,6 +314,44 @@ sys_open(void)
     }
   }
 
+  // ==================================================================================================================
+  int depth = 0;
+  
+  // Detect if the inode is a symlink
+  while(ip->type == T_SYMLINK) {
+    
+    // Enforce a maximum depth to prevent cycles
+    if(depth >= 10) {
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+
+    // Buffer to hold the target path. 
+    char target[128]; 
+    
+    // Read the target path from the symlink's data blocks
+    if(readi(ip, target, 0, sizeof(target)) <= 0) {
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+
+    // Unlock the current symlink before looking up the next one
+    iunlockput(ip);
+
+    // Resolve the target path string into a new inode
+    if((ip = namei(target)) == 0) {
+      end_op();
+      return -1;
+    }
+    
+    // Lock the newly found inode, increase depth, and loop again
+    ilock(ip);
+    depth++;
+  }
+  // ==================================================================================================================
+
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
