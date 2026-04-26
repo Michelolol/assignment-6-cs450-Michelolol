@@ -442,3 +442,39 @@ sys_pipe(void)
   fd[1] = fd1;
   return 0;
 }
+
+int
+sys_symlink(void)
+{
+  char *target, *linkpath;
+  struct inode *ip;
+
+  // 1. Fetch the user arguments (target and linkpath)
+  if(argstr(0, &target) < 0 || argstr(1, &linkpath) < 0)
+    return -1; 
+
+  // 2. Start the file system transaction
+  begin_op();
+
+  // 3. Create the symlink using T_SYMLINK
+  ip = create(linkpath, T_SYMLINK, 0, 0);
+  if(ip == 0){
+    end_op();
+    return -1; //  returning -1 on error 
+  }
+
+  // 4. Write the target string to the inode (must be NUL-terminated)
+  // writei arguments: inode, source string, offset (0), size
+  if(writei(ip, target, 0, strlen(target) + 1) < strlen(target) + 1) {
+    // If writing fails, clean up and return error
+    iunlockput(ip);
+    end_op();
+    return 1; 
+  }
+
+  // 5. Unlock, end transaction, and return success
+  iunlockput(ip);
+  end_op();
+  
+  return 0; // Success
+}
